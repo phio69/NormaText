@@ -21,4 +21,4 @@ NormaText помогает студентам, инженерам и техни�
 ![Use Case Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/usecasediagram.png)
 
 ### Class Diagram
-![Class Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/class_diagram.png)
+![Class Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/classdiagram.png)
