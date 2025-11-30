@@ -15,10 +15,16 @@ NormaText помогает студентам, инженерам и техни�
 - Морфологический анализ: **pymorphy3**
 - Автономность: **без интернета и внешних API**
 
+## Тестирование
+Тесты проверяют:
+- корректность лемматизации(pymorphy3)
+- определение запрещенных слов 
+- игнорирование неккоректных входных данных
+
 ## UML-Диаграммы
 
 ### Use case diagram
 ![Use Case Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/usecasediagram.png)
 
 ### Class Diagram
-![Class Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/class_diagram.png)
+![Class Diagram](https://raw.githubusercontent.com/phio69/NormaText/main/images/classdiagram.png)
