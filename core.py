@@ -6,6 +6,7 @@ from docx import Document
 import pymorphy3
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
+import re
 
 @dataclass
 class Heading:
@@ -58,12 +59,176 @@ def check_terminology(document):
                 continue
     return errors
 
-def check_structure(document, doc_type="приказ"):
-    """Проверяет структуру (упрощённо)."""
+def check_structure(document, doc_type: str) -> List[str]:
+    """Проверяет структуру документа по ГОСТу"""
     errors = []
+
+    # Используем новую функцию проверки реквизитов
+    errors.extend(check_required_fields(document, doc_type))
+
+    # Дополнительные проверки структуры
     text_sample = " ".join(p.text for p in document.paragraphs[:5])
-    if doc_type == "приказ" and "утверждаю" not in text_sample.lower():
-        errors.append("• Стр. 1: Отсутствует реквизит «Утверждаю»")
+    #Проверка Оформления
+    errors.extend(check_formatting(document))
+    errors.extend(check_paragraphs_structure(document))
+    errors.extend(check_lists_formatting(document))
+    errors.extend(check_fonts_and_sizes(document))
+
+    # Проверка наличия даты
+    if "202" not in text_sample and "202" not in text_sample:
+        errors.append("• Возможно отсутствует дата документа")
+
+    return errors
+
+
+def check_fonts_and_sizes(document) -> List[str]:
+    """
+    Проверка шрифтов и размеров по ГОСТу
+    """
+    errors = []
+    non_times_fonts = set()
+    wrong_sizes = set()
+
+    for i, paragraph in enumerate(document.paragraphs):
+        if not paragraph.text.strip():
+            continue
+
+        is_heading = _is_heading(paragraph)
+
+        for run in paragraph.runs:
+            if not run.text.strip():
+                continue
+
+            # Проверка шрифта
+            if hasattr(run, 'font') and run.font.name:
+                font_name = run.font.name.lower()
+                allowed_fonts = ['times', 'times new roman']
+
+                if not any(allowed in font_name for allowed in allowed_fonts):
+                    non_times_fonts.add(run.font.name)
+
+            # Проверка размера шрифта
+            if hasattr(run, 'font') and hasattr(run.font, 'size') and run.font.size:
+                try:
+                    # Конвертируем в пункты (1 point = 12700)
+                    if hasattr(run.font.size, 'pt'):
+                        size_pt = run.font.size.pt
+                    else:
+                        size_pt = run.font.size / 12700
+
+                    if is_heading:
+                        # Для заголовков: 14-16 pt
+                        if size_pt < 14 or size_pt > 16:
+                            wrong_sizes.add(f"заголовок: {size_pt:.1f}pt (требуется 14-16pt)")
+                    else:
+                        # Для основного текста: 12-14 pt
+                        if size_pt < 12 or size_pt > 14:
+                            wrong_sizes.add(f"текст: {size_pt:.1f}pt (требуется 12-14pt)")
+
+                except (AttributeError, TypeError):
+                    continue
+
+    # Формируем ошибки
+    if non_times_fonts:
+        fonts_list = ', '.join(non_times_fonts)
+        errors.append(f"• Обнаружены нерекомендуемые шрифты: {fonts_list} (ГОСТ: Times New Roman)")
+
+    if wrong_sizes:
+        sizes_list = '; '.join(wrong_sizes)
+        errors.append(f"• Несоответствие размеров шрифта: {sizes_list}")
+
+    return errors
+
+def check_formatting(document) -> List[str]:
+    """
+    Проверяет базовое оформление документа по ГОСТ Р 7.0.97-2016
+    """
+    errors = []
+
+    for i, paragraph in enumerate(document.paragraphs):
+        if not paragraph.text.strip():
+            continue
+
+        # Проверка выравнивания (ГОСТ: по ширине для основного текста)
+        if hasattr(paragraph, 'alignment') and paragraph.alignment:
+            # 0=left, 1=center, 2=right, 3=justify
+            if paragraph.alignment not in [0, 3]:  # Допустимо: по левому краю и по ширине
+                errors.append(f"• Стр. {i + 1}: Рекомендуется выравнивание по ширине или левому краю")
+
+        # Проверка на использование CAPSLOCK (не рекомендуется)
+        text = paragraph.text
+        if len(text) > 10 and text.isupper():
+            errors.append(f"• Стр. {i + 1}: Избегайте написания всего текста в верхнем регистре")
+
+    return errors
+
+
+def check_paragraphs_structure(document) -> List[str]:
+    """
+    Проверяет структуру абзацев по ГОСТу
+    """
+    errors = []
+
+    # Проверка длины абзацев (не должны быть слишком длинными)
+    for i, paragraph in enumerate(document.paragraphs):
+        text = paragraph.text.strip()
+        if len(text) > 500:  # Слишком длинный абзац
+            errors.append(f"• Стр. {i + 1}: Абзац слишком длинный (разбейте на несколько)")
+
+        # Проверка на отсутствие текста между заголовками
+        if i > 0 and _is_heading(paragraph) and _is_heading(document.paragraphs[i - 1]):
+            if not document.paragraphs[i - 1].text.strip():
+                errors.append(f"• Стр. {i + 1}: Между заголовками должен быть текст")
+
+    return errors
+
+
+def _is_heading(paragraph) -> bool:
+    """Проверяет, является ли абзац заголовком"""
+    return (hasattr(paragraph, 'style') and
+            hasattr(paragraph.style, 'name') and
+            paragraph.style.name.startswith('Heading'))
+
+
+def check_lists_formatting(document) -> List[str]:
+    """
+    Проверяет оформление списков по ГОСТу
+    """
+    errors = []
+
+    for i, paragraph in enumerate(document.paragraphs):
+        text = paragraph.text.strip()
+
+        # Проверка маркированных списков
+        if text.startswith(('•', '-', '—', '–')):
+            if not text[1:].strip():  # Пустой элемент списка
+                errors.append(f"• Стр. {i + 1}: Пустой элемент списка")
+
+        # Проверка нумерованных списков
+        if re.match(r'^\d+[\.\)]', text):
+            if not text[2:].strip():  # Пустой элемент списка
+                errors.append(f"• Стр. {i + 1}: Пустой элемент нумерованного списка")
+
+    return errors
+
+def check_required_fields(document, doc_type: str) -> List[str]:
+    """Проверяет наличие обязательных реквизитов по ГОСТ Р 7.0.97-2016"""
+    errors = []
+    full_text = " ".join(p.text for p in document.paragraphs).lower()
+
+    # Обязательные реквизиты для разных типов документов
+    REQUIRED_FIELDS = {
+        "приказ": ["приказ"],
+        "служебная записка": ["служебная записка"],
+        "отчёт": ["отчёт", "реферат", "список использованный источников",""]
+
+    }
+
+    required = REQUIRED_FIELDS.get(doc_type, [])
+    for field in required:
+        if field not in full_text:
+            errors.append(f"• Отсутствует обязательный реквизит: '{field}'")
+
     return errors
 
 
