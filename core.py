@@ -7,6 +7,7 @@ import pymorphy3
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 import re
+from dictionaries import FORBIDDEN_WORDS, TERMINOLOGY_REPLACEMENTS
 
 @dataclass
 class Heading:
@@ -19,24 +20,23 @@ class Heading:
 # Инициализация морфологического анализатора (один раз для всего приложения)
 _morph = pymorphy3.MorphAnalyzer()
 
-# Словарь запрещённых слов (в начальной форме)
-FORBIDDEN_WORDS = {
-    "штука", "типа", "короче", "ну тип", "как бы", "просто", "вообще", "очень",
-    "крутой", "прикольный", "нифига", "блин", "чё", "надо", "дело", "общий",
-    "факт", "имхо", "походу", "зачем", "чтоб", "ага", "угу", "аг", "сам",
-    "конечно", "честно", "говорить", "вот", "именно", "так", "надо", "ничего",
-    "фигня", "бардак", "завал", "халява", "лажа", "прикол", "треш", "огонь",
-    "кажется", "думать", "мнение", "всё", "равно", "любой", "случай", "там",
-    "этот", "самый", "вроде", "быть", "наверно", "примерно", "некоторый", "разный",
-    "всякий", "чел", "народ", "ребята", "чувак", "пацан", "девчонка", "хотеть",
-    "жестко", "кайф", "ништяк", "отпад", "жесть", "бомбить", "зашквар", "лол",
-    "кек", "ржака", "мем", "сарказм", "ирония", "понимать", "идти", "прочее",
-    "такой", "вообще", "собственно", "фактически", "самый", "дело", "сути", "принцип"
-}
-
 def load_document(file_path):
     """Загружает .docx-документ."""
     return Document(file_path)
+
+def save_fixed_document(document, original_path):
+    """Сохраняет исправленный документ"""
+    from pathlib import Path
+
+    original = Path(original_path)
+    new_name = f"{original.stem}_исправленный{original.suffix}"
+    new_path = original.parent / new_name
+
+    try:
+        document.save(new_path)
+        return f"Документ сохранён: {new_path}"
+    except Exception as e:
+        return f"Ошибка сохранения: {str(e)}"
 
 def check_terminology(document):
     """Проверяет документ на наличие запрещённых слов."""
@@ -58,6 +58,63 @@ def check_terminology(document):
             except Exception:
                 continue
     return errors
+
+
+def auto_fix_terminology(document):
+    """
+    Автоматически заменяет запрещенные слова на корректные аналоги
+    Возвращает количество выполненных замен
+    """
+    replacements_count = 0
+
+    for paragraph in document.paragraphs:
+        if not paragraph.text.strip():
+            continue
+
+        # Разбиваем абзац на слова и обрабатываем каждое
+        original_text = paragraph.text
+        words = original_text.split()
+        new_words = []
+
+        for word in words:
+            clean_word = word.strip(".,;:!?\"'()[]{}—–-")
+
+            if not clean_word or not clean_word.isalpha():
+                new_words.append(word)
+                continue
+
+            try:
+                normal_form = _morph.parse(clean_word.lower())[0].normal_form
+
+                if normal_form in TERMINOLOGY_REPLACEMENTS:
+                    replacement = TERMINOLOGY_REPLACEMENTS[normal_form]
+
+                    if replacement:  # Если замена не пустая
+                        # Сохраняем оригинальное форматирование (регистр)
+                        if clean_word.istitle():
+                            replacement = replacement.title()
+                        elif clean_word.isupper():
+                            replacement = replacement.upper()
+
+                        # Заменяем слово в оригинальном тексте с сохранением знаков препинания
+                        new_word = word.replace(clean_word, replacement)
+                        new_words.append(new_word)
+                        replacements_count += 1
+                    else:
+                        # Если замена пустая - удаляем слово
+                        replacements_count += 1
+                        continue
+                else:
+                    new_words.append(word)
+
+            except Exception:
+                new_words.append(word)
+
+        # Обновляем текст абзаца
+        if replacements_count > 0:
+            paragraph.text = ' '.join(new_words)
+
+    return replacements_count
 
 def check_structure(document, doc_type: str) -> List[str]:
     """Проверяет структуру документа по ГОСТу"""
