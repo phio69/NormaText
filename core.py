@@ -11,7 +11,7 @@ from dictionaries import FORBIDDEN_WORDS, TERMINOLOGY_REPLACEMENTS
 
 @dataclass
 class Heading:
-    """Класс для представления заголовка"""
+    # Класс для представления заголовка
     level: int           # Уровень (1, 2, 3...)
     text: str           # Текст заголовка
     paragraph_index: int # Номер абзаца в документе
@@ -21,11 +21,11 @@ class Heading:
 _morph = pymorphy3.MorphAnalyzer()
 
 def load_document(file_path):
-    """Загружает .docx-документ."""
+    # Загружает .docx-документ.
     return Document(file_path)
 
 def save_fixed_document(document, original_path):
-    """Сохраняет исправленный документ"""
+    # Сохраняет исправленный документ
     from pathlib import Path
 
     original = Path(original_path)
@@ -39,7 +39,7 @@ def save_fixed_document(document, original_path):
         return f"Ошибка сохранения: {str(e)}"
 
 def check_terminology(document):
-    """Проверяет документ на наличие запрещённых слов."""
+    # Проверяет документ на наличие запрещённых слов.
     errors = []
     all_lines = [(i + 1, p.text) for i, p in enumerate(document.paragraphs) if p.text.strip()]
 
@@ -61,10 +61,8 @@ def check_terminology(document):
 
 
 def auto_fix_terminology(document):
-    """
-    Автоматически заменяет запрещенные слова на корректные аналоги
-    Возвращает количество выполненных замен
-    """
+    # Автоматически заменяет запрещенные слова на корректные аналоги
+    # Возвращает количество выполненных замен
     replacements_count = 0
 
     for paragraph in document.paragraphs:
@@ -117,7 +115,7 @@ def auto_fix_terminology(document):
     return replacements_count
 
 def check_structure(document, doc_type: str) -> List[str]:
-    """Проверяет структуру документа по ГОСТу"""
+    # Проверяет структуру документа по ГОСТу
     errors = []
 
     # Используем новую функцию проверки реквизитов
@@ -132,16 +130,14 @@ def check_structure(document, doc_type: str) -> List[str]:
     errors.extend(check_fonts_and_sizes(document))
 
     # Проверка наличия даты
-    if "202" not in text_sample and "202" not in text_sample:
+    if "202" not in text_sample:
         errors.append("• Возможно отсутствует дата документа")
 
     return errors
 
 
 def check_fonts_and_sizes(document) -> List[str]:
-    """
-    Проверка шрифтов и размеров по ГОСТу
-    """
+    # Проверка шрифтов и размеров по ГОСТу
     errors = []
     non_times_fonts = set()
     wrong_sizes = set()
@@ -197,9 +193,7 @@ def check_fonts_and_sizes(document) -> List[str]:
     return errors
 
 def check_formatting(document) -> List[str]:
-    """
-    Проверяет базовое оформление документа по ГОСТ Р 7.0.97-2016
-    """
+    # Проверяет базовое оформление документа по ГОСТ Р 7.0.97-2016
     errors = []
 
     for i, paragraph in enumerate(document.paragraphs):
@@ -221,9 +215,7 @@ def check_formatting(document) -> List[str]:
 
 
 def check_paragraphs_structure(document) -> List[str]:
-    """
-    Проверяет структуру абзацев по ГОСТу
-    """
+    # Проверяет структуру абзацев по ГОСТу
     errors = []
 
     # Проверка длины абзацев (не должны быть слишком длинными)
@@ -241,16 +233,14 @@ def check_paragraphs_structure(document) -> List[str]:
 
 
 def _is_heading(paragraph) -> bool:
-    """Проверяет, является ли абзац заголовком"""
+    # Проверяет, является ли абзац заголовком
     return (hasattr(paragraph, 'style') and
             hasattr(paragraph.style, 'name') and
             paragraph.style.name.startswith('Heading'))
 
 
 def check_lists_formatting(document) -> List[str]:
-    """
-    Проверяет оформление списков по ГОСТу
-    """
+    # Проверяет оформление списков по ГОСТу
     errors = []
 
     for i, paragraph in enumerate(document.paragraphs):
@@ -269,7 +259,7 @@ def check_lists_formatting(document) -> List[str]:
     return errors
 
 def check_required_fields(document, doc_type: str) -> List[str]:
-    """Проверяет наличие обязательных реквизитов по ГОСТ Р 7.0.97-2016"""
+    # Проверяет наличие обязательных реквизитов по ГОСТ Р 7.0.97-2016
     errors = []
     full_text = " ".join(p.text for p in document.paragraphs).lower()
 
@@ -277,8 +267,7 @@ def check_required_fields(document, doc_type: str) -> List[str]:
     REQUIRED_FIELDS = {
         "приказ": ["приказ"],
         "служебная записка": ["служебная записка"],
-        "отчёт": ["отчёт", "реферат", "список использованный источников",""]
-
+        "отчёт": ["отчёт", "реферат", "список использованных источников","заключение"]
     }
 
     required = REQUIRED_FIELDS.get(doc_type, [])
@@ -290,10 +279,8 @@ def check_required_fields(document, doc_type: str) -> List[str]:
 
 
 def extract_headings(document) -> List[Heading]:
-    """
-    Извлекает заголовки из документа на основе стилей.
-    Строго по ГОСТу - точка после номера НЕ допускается.
-    """
+    # Извлекает заголовки из документа на основе стилей.
+    # Строго по ГОСТу - точка после номера НЕ допускается.
     headings = []
 
     for i, paragraph in enumerate(document.paragraphs):
@@ -342,11 +329,7 @@ def extract_headings(document) -> List[Heading]:
 def _is_valid_number_format(number: str, level: int) -> bool:
     """
     Проверяет корректность формата номера по ГОСТ.
-
     Согласно ГОСТ Р 7.0.97-2016:
-    - Номер состоит из цифр, разделенных точками
-    - Точка после номера НЕ ставится
-    - Количество частей должно соответствовать уровню
     """
     # Убираем возможные пробелы в начале/конце
     number = number.strip()
@@ -368,7 +351,7 @@ def _is_valid_number_format(number: str, level: int) -> bool:
 
 
 def _check_sequence(heading: Heading, current_numbers: dict, index: int, all_headings: List[Heading]) -> Optional[str]:
-    """Упрощенная и надежная проверка последовательности."""
+    # Упрощенная и надежная проверка последовательности.
     parts = [int(p) for p in heading.number.split('.')]
     level = heading.level
 
@@ -395,15 +378,7 @@ def _check_sequence(heading: Heading, current_numbers: dict, index: int, all_hea
     return None
 
 def check_numbering(document, doc_type: str = "приказ") -> List[str]:
-    """
-    Проверяет правильность нумерации разделов документа.
-
-    Args:
-        document: Загруженный документ python-docx
-
-    Returns:
-        List[str]: Список ошибок нумерации
-    """
+    # Проверяет правильность нумерации разделов документа.
     errors = []
     headings = extract_headings(document)
 
